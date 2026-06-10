@@ -1,36 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Byggprojektledning
 
-## Getting Started
+Personligt AI-drivet kontrollcenter för projektledare/beställare inom bygg och fastighet.
+Projekt, möten, åtgärdspunkter, ekonomi (budget/fakturor/ÄTA), dokument, risker,
+automationer och rapporter — på ett ställe, helt på svenska.
 
-First, run the development server:
+**Live:** sajten deployas till Netlify från detta repo.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Teknik
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Next.js (App Router) + TypeScript
+- Tailwind CSS v4 + shadcn/ui
+- Prisma + Neon Postgres (gratis molndatabas — samma data lokalt och på Netlify)
+- Anthropic API (Claude) för AI-funktionerna, alltid server-side
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Kom igång lokalt
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Installera beroenden**
 
-## Learn More
+   ```bash
+   npm install
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+2. **Skapa `.env`** — kopiera `.env.example` till `.env` och fyll i värdena:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+   - `DATABASE_URL` / `DIRECT_URL` — anslutningssträngar från [Neon](https://neon.tech)
+     (pooled respektive direkt; den direkta saknar `-pooler` i hostnamnet).
+   - `ANTHROPIC_API_KEY` — skapas på [platform.claude.com](https://platform.claude.com)
+     under *API Keys*. Krävs för AI-funktionerna (möten, assistent, rapporter).
+   - `APP_PASSWORD` — lösenordet du loggar in med.
+   - `SESSION_SECRET` — slumpsträng som signerar inloggnings-cookien:
+     `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+3. **Skapa tabellerna och fyll med exempeldata**
 
-## Deploy on Vercel
+   ```bash
+   npx prisma migrate dev
+   npm run db:seed
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+4. **Starta**
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+   ```bash
+   npm run dev
+   ```
+
+   Öppna [http://localhost:3000](http://localhost:3000) och logga in med ditt `APP_PASSWORD`.
+
+## Backup av databasen
+
+Databasen ligger i Neon (Postgres). Två sätt att ta backup:
+
+1. **Neons inbyggda återställning** — Neon sparar historik automatiskt
+   (*Restore/Point-in-time* i Neon-konsolen) så att du kan återställa till en
+   tidigare tidpunkt utan egen backup.
+
+2. **Egen dump med `pg_dump`** (kräver PostgreSQL-klienten installerad):
+
+   ```bash
+   pg_dump "DIN_DIRECT_URL_HÄR" --format=custom --file=backup_2026-06-10.dump
+   ```
+
+   Återställ med `pg_restore --dbname="DIN_DIRECT_URL" backup_2026-06-10.dump`.
+
+## Bra att veta
+
+- **Seed-datat** (tre exempelprojekt) kan läggas tillbaka när som helst med
+  `npm run db:seed` — observera att kommandot först rensar alla projekt.
+- **AI-modellen** styrs av `ANTHROPIC_MODEL` i `.env` (standard `claude-sonnet-4-6`).
+  AI-anrop kostar per användning enligt Anthropics prislista.
+- **Databasen i webbläsaren:** `npm run db:studio` öppnar Prisma Studio.
+
+## Byggfaser
+
+| Fas | Innehåll | Status |
+| --- | --- | --- |
+| 1 | Grund, inloggning, projektregister, dashboard | ✅ Klar |
+| 2 | Möteshantering med AI-protokoll och åtgärdspunkter | Planerad |
+| 3 | Ekonomiuppföljning: budget, fakturor, ÄTA, prognos | Planerad |
+| 4 | Dokumenthantering med versioner och AI-kategorisering | Planerad |
+| 5 | AI-assistent med projektkontext | Planerad |
+| 6 | Automationer, notiser och rapportgenerator | Planerad |

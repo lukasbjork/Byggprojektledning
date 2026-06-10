@@ -1,0 +1,370 @@
+generator client {
+  provider      = "prisma-client-js"
+  // rhel-openssl-3.0.x krävs för att Prisma-motorn ska fungera i Netlifys serverless-miljö
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ===== Enums =====
+
+enum ProjectType {
+  NYBYGGNAD
+  OMBYGGNAD
+  ROT
+  ANLAGGNING
+  FORVALTNING
+}
+
+enum Entreprenadform {
+  TOTALENTREPRENAD
+  UTFORANDEENTREPRENAD
+  DELAD
+}
+
+enum ProjectStatus {
+  PLANERING
+  UPPHANDLING
+  PRODUKTION
+  BESIKTNING
+  GARANTITID
+  AVSLUTAT
+}
+
+enum MilestoneStatus {
+  EJ_PABORJAD
+  PAGAENDE
+  KLAR
+}
+
+enum MeetingType {
+  BYGGMOTE
+  PROJEKTERINGSMOTE
+  EKONOMIMOTE
+  STARTMOTE
+}
+
+enum ActionStatus {
+  OPPEN
+  PAGAENDE
+  KLAR
+  FORSENAD
+}
+
+enum InvoiceStatus {
+  ATT_GRANSKA
+  ATTESTERAD
+  BESTRIDEN
+  BETALD
+}
+
+enum AtaStatus {
+  ANMALD
+  PRISSATT
+  GODKAND
+  AVSLAGEN
+  FAKTURERAD
+}
+
+enum DocumentCategory {
+  RITNINGAR
+  AVTAL
+  PROTOKOLL
+  BESIKTNING
+  EKONOMI
+  ATA
+  MYNDIGHET
+  OVRIGT
+}
+
+enum RiskLevel {
+  LAG
+  MEDEL
+  HOG
+}
+
+enum RiskStatus {
+  OPPEN
+  HANTERAD
+  STANGD
+}
+
+enum AutomationType {
+  DEADLINE_NARMAR_SIG
+  ATGARD_FORSENAD
+  BUDGET_VARNING
+  ATA_PAMINNELSE
+  FAKTURA_PAMINNELSE
+  VECKORAPPORT
+}
+
+enum ReportType {
+  VECKORAPPORT
+  MANADSRAPPORT
+}
+
+enum ReportStatus {
+  UTKAST
+  SPARAD
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
+// ===== Modeller =====
+
+model Project {
+  id              String          @id @default(cuid())
+  name            String
+  projectNumber   String          @unique
+  type            ProjectType
+  entreprenadform Entreprenadform
+  status          ProjectStatus   @default(PLANERING)
+  budget          Decimal         @default(0) @db.Decimal(14, 2)
+  startDate       DateTime?
+  endDate         DateTime?
+  client          String? // beställare
+  contractor      String? // entreprenör
+  description     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  milestones        Milestone[]
+  meetings          Meeting[]
+  actionItems       ActionItem[]
+  budgetItems       BudgetItem[]
+  invoices          Invoice[]
+  changeOrders      ChangeOrder[]
+  documents         Document[]
+  requiredDocuments RequiredDocument[]
+  risks             Risk[]
+  reports           Report[]
+  chatConversations ChatConversation[]
+  activityLogs      ActivityLog[]
+}
+
+model Milestone {
+  id        String          @id @default(cuid())
+  projectId String
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title     String
+  deadline  DateTime
+  status    MilestoneStatus @default(EJ_PABORJAD)
+  createdAt DateTime        @default(now())
+}
+
+model Meeting {
+  id           String      @id @default(cuid())
+  projectId    String
+  project      Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title        String
+  type         MeetingType
+  date         DateTime
+  participants String? // kommaseparerad lista
+  rawNotes     String? // inklistrade råanteckningar/transkript
+  protocol     String? // AI-genererat protokoll (Markdown)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  actionItems ActionItem[]
+}
+
+model ActionItem {
+  id          String       @id @default(cuid())
+  projectId   String
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  meetingId   String?
+  meeting     Meeting?     @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  title       String
+  description String?
+  responsible String?
+  deadline    DateTime?
+  status      ActionStatus @default(OPPEN)
+  completedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model BudgetItem {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  account     String // konto, t.ex. "01 Markarbeten"
+  description String?
+  budgeted    Decimal  @default(0) @db.Decimal(14, 2)
+  createdAt   DateTime @default(now())
+
+  invoices Invoice[]
+}
+
+model Invoice {
+  id           String        @id @default(cuid())
+  projectId    String
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budgetItemId String?
+  budgetItem   BudgetItem?   @relation(fields: [budgetItemId], references: [id], onDelete: SetNull)
+  supplier     String
+  amount       Decimal       @db.Decimal(14, 2)
+  invoiceDate  DateTime
+  status       InvoiceStatus @default(ATT_GRANSKA)
+  note         String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model ChangeOrder {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  number      Int // löpnummer per projekt
+  title       String
+  description String?
+  date        DateTime  @default(now())
+  status      AtaStatus @default(ANMALD)
+  amount      Decimal   @default(0) @db.Decimal(14, 2)
+  note        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([projectId, number])
+}
+
+model Document {
+  id          String           @id @default(cuid())
+  projectId   String
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String // logiskt dokumentnamn — samma namn => ny version
+  category    DocumentCategory
+  summary     String? // AI-genererad sammanfattning
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  versions DocumentVersion[]
+
+  @@unique([projectId, name])
+}
+
+model DocumentVersion {
+  id          String   @id @default(cuid())
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  version     Int
+  fileName    String // namn enligt namnstandard
+  storagePath String // sökväg i uploads/ eller Netlify Blobs-nyckel
+  mimeType    String?
+  size        Int?
+  createdAt   DateTime @default(now())
+
+  @@unique([documentId, version])
+}
+
+model RequiredDocument {
+  id        String            @id @default(cuid())
+  projectId String
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  category  DocumentCategory?
+  fulfilled Boolean           @default(false)
+  createdAt DateTime          @default(now())
+}
+
+model Risk {
+  id          String     @id @default(cuid())
+  projectId   String
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  probability RiskLevel  @default(MEDEL)
+  consequence RiskLevel  @default(MEDEL)
+  status      RiskStatus @default(OPPEN)
+  action      String? // åtgärd/hantering
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model AutomationRule {
+  id               String         @id @default(cuid())
+  type             AutomationType
+  name             String
+  active           Boolean        @default(true)
+  thresholdDays    Int? // "N dagar" där det är relevant
+  thresholdPercent Int? // budgetvarning, t.ex. 90
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  logs AutomationLog[]
+}
+
+model AutomationLog {
+  id        String         @id @default(cuid())
+  ruleId    String
+  rule      AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  message   String
+  createdAt DateTime       @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String?
+  link      String? // intern länk, t.ex. /projekt/xyz
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Report {
+  id        String       @id @default(cuid())
+  projectId String
+  project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      ReportType
+  title     String
+  content   String // Markdown
+  status    ReportStatus @default(UTKAST)
+  periodStart DateTime?
+  periodEnd   DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model ReportTemplate {
+  id        String     @id @default(cuid())
+  type      ReportType
+  name      String
+  content   String // rubrikstruktur + toninstruktioner som AI:n följer
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model ChatConversation {
+  id        String   @id @default(cuid())
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  title     String   @default("Ny konversation")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages ChatMessage[]
+}
+
+model ChatMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           ChatRole
+  content        String
+  createdAt      DateTime         @default(now())
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  message   String
+  createdAt DateTime @default(now())
+}
