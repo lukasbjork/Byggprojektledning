@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { DocumentCategory } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { AI_MODEL, BYGG_SYSTEM_PROMPT, getAnthropicClient, hasAnthropicKey } from "@/lib/ai";
+import {
+  AI_MISSING_KEY_MESSAGE,
+  BYGG_SYSTEM_PROMPT,
+  generateAIText,
+  hasAIKey,
+} from "@/lib/ai";
 import { documentCategoryLabels } from "@/lib/labels";
 
 export interface FormState {
@@ -74,11 +79,8 @@ export async function aiCategorizeDocument(
   documentId: string,
   text: string
 ): Promise<CategorizeResult> {
-  if (!hasAnthropicKey()) {
-    return {
-      error:
-        "ANTHROPIC_API_KEY saknas. Lägg in din API-nyckel i .env (lokalt) respektive miljövariablerna i produktion.",
-    };
+  if (!hasAIKey()) {
+    return { error: AI_MISSING_KEY_MESSAGE };
   }
   if (!text.trim()) {
     return { error: "Klistra in textinnehåll från dokumentet först." };
@@ -87,12 +89,10 @@ export async function aiCategorizeDocument(
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
   if (!doc) return { error: "Dokumentet hittades inte." };
 
-  const client = getAnthropicClient();
   try {
-    const response = await client.messages.create({
-      model: AI_MODEL,
-      max_tokens: 600,
+    const answer = await generateAIText({
       system: BYGG_SYSTEM_PROMPT,
+      maxTokens: 600,
       messages: [
         {
           role: "user",
@@ -109,11 +109,6 @@ ${text.slice(0, 12_000)}
         },
       ],
     });
-
-    const answer = response.content
-      .filter((b) => b.type === "text")
-      .map((b) => b.text)
-      .join("\n");
     const categoryMatch = answer.match(/KATEGORI:\s*([A-ZÅÄÖ_]+)/i);
     const summaryMatch = answer.match(/SAMMANFATTNING:\s*([\s\S]+)/i);
     const category = CATEGORIES.find(

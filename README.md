@@ -6,8 +6,8 @@ automationer och rapporter — på ett ställe, helt på svenska.
 
 **Live på två ställen** (samma databas — använd valfri):
 
-- https://byggprojektledning.netlify.app (Netlify, AI ingår via Netlifys AI Gateway)
-- https://byggprojektledning.vercel.app (Vercel, kräver egen `ANTHROPIC_API_KEY` för AI-funktionerna)
+- https://byggprojektledning.netlify.app (Netlify)
+- https://byggprojektledning.vercel.app (Vercel)
 
 Båda deployas automatiskt vid push till `main`. Tar gratiskrediterna slut hos den ena
 fungerar den andra.
@@ -16,8 +16,9 @@ fungerar den andra.
 
 - Next.js (App Router) + TypeScript
 - Tailwind CSS v4 + shadcn/ui
-- Prisma + Neon Postgres (gratis molndatabas — samma data lokalt och på Netlify)
-- Anthropic API (Claude) för AI-funktionerna, alltid server-side
+- Prisma + Neon Postgres (gratis molndatabas — samma data lokalt, på Netlify och på Vercel)
+- Google Gemini (gratis) för AI-funktionerna, alltid server-side.
+  Anthropic Claude kan användas som reserv om `ANTHROPIC_API_KEY` sätts.
 
 ## Kom igång lokalt
 
@@ -31,8 +32,8 @@ fungerar den andra.
 
    - `DATABASE_URL` / `DIRECT_URL` — anslutningssträngar från [Neon](https://neon.tech)
      (pooled respektive direkt; den direkta saknar `-pooler` i hostnamnet).
-   - `ANTHROPIC_API_KEY` — skapas på [platform.claude.com](https://platform.claude.com)
-     under *API Keys*. Krävs för AI-funktionerna (möten, assistent, rapporter).
+   - `GEMINI_API_KEY` — gratis nyckel från [aistudio.google.com](https://aistudio.google.com)
+     (*Get API key*). Driver AI-funktionerna (möten, assistent, rapporter, dokument).
    - `APP_PASSWORD` — lösenordet du loggar in med.
    - `SESSION_SECRET` — slumpsträng som signerar inloggnings-cookien:
      `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
@@ -72,8 +73,9 @@ Databasen ligger i Neon (Postgres). Två sätt att ta backup:
 
 - **Seed-datat** (tre exempelprojekt) kan läggas tillbaka när som helst med
   `npm run db:seed` — observera att kommandot först rensar alla projekt.
-- **AI-modellen** styrs av `ANTHROPIC_MODEL` i `.env` (standard `claude-sonnet-4-6`).
-  AI-anrop kostar per användning enligt Anthropics prislista.
+- **AI-modellen** styrs av `GEMINI_MODEL` i `.env` (standard `gemini-2.5-flash`, gratis).
+  Sätts `ANTHROPIC_API_KEY` används i stället Claude (`ANTHROPIC_MODEL`), som kostar
+  per användning — lämna den tom för helt gratis drift.
 - **Databasen i webbläsaren:** `npm run db:studio` öppnar Prisma Studio.
 
 ## Byggfaser

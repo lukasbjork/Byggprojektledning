@@ -1,6 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { AI_MODEL, BYGG_SYSTEM_PROMPT, getAnthropicClient, hasAnthropicKey } from "@/lib/ai";
+import {
+  AI_MISSING_KEY_MESSAGE,
+  BYGG_SYSTEM_PROMPT,
+  aiTextResponse,
+  hasAIKey,
+  streamAIText,
+} from "@/lib/ai";
 import { buildProjectContext, buildPortfolioContext } from "@/lib/project-context";
 
 export const maxDuration = 120;
@@ -11,11 +17,8 @@ export const maxDuration = 120;
  * i databasen när streamen är klar.
  */
 export async function POST(request: NextRequest) {
-  if (!hasAnthropicKey()) {
-    return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY saknas. Lägg in din API-nyckel och försök igen." },
-      { status: 503 }
-    );
+  if (!hasAIKey()) {
+    return NextResponse.json({ error: AI_MISSING_KEY_MESSAGE }, { status: 503 });
   }
 
   const body = (await request.json().catch(() => null)) as {
@@ -65,46 +68,16 @@ ${context || "Ingen projektdata tillgänglig."}`;
     { role: "user" as const, content },
   ];
 
-  const client = getAnthropicClient();
-  const stream = client.messages.stream({
-    model: AI_MODEL,
-    max_tokens: 4000,
-    system,
-    messages: history,
-  });
+  const gen = streamAIText({ system, maxTokens: 4000, messages: history });
 
-  const encoder = new TextEncoder();
-  const readable = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      let full = "";
-      try {
-        for await (const event of stream) {
-          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-            full += event.delta.text;
-            controller.enqueue(encoder.encode(event.delta.text));
-          }
-        }
-        // Spara assistentens svar när streamen är klar
-        if (full.trim()) {
-          await prisma.chatMessage.create({
-            data: { conversationId: conversation.id, role: "ASSISTANT", content: full },
-          });
-          await prisma.chatConversation.update({
-            where: { id: conversation.id },
-            data: { updatedAt: new Date() },
-          });
-        }
-        controller.close();
-      } catch (e) {
-        controller.error(e);
-      }
-    },
-    cancel() {
-      stream.abort();
-    },
-  });
-
-  return new Response(readable, {
-    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+  // Assistentens svar sparas i databasen när streamen är klar
+  return aiTextResponse(gen, async (full) => {
+    await prisma.chatMessage.create({
+      data: { conversationId: conversation.id, role: "ASSISTANT", content: full },
+    });
+    await prisma.chatConversation.update({
+      where: { id: conversation.id },
+      data: { updatedAt: new Date() },
+    });
   });
 }

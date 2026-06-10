@@ -1,17 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { AI_MODEL, BYGG_SYSTEM_PROMPT, getAnthropicClient, hasAnthropicKey } from "@/lib/ai";
+import {
+  AI_MISSING_KEY_MESSAGE,
+  BYGG_SYSTEM_PROMPT,
+  aiTextResponse,
+  hasAIKey,
+  streamAIText,
+} from "@/lib/ai";
 import { buildProjectContext } from "@/lib/project-context";
 
 export const maxDuration = 120;
 
 /** Streamar ett AI-genererat rapportutkast (vecko- eller månadsrapport). */
 export async function POST(request: NextRequest) {
-  if (!hasAnthropicKey()) {
-    return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY saknas. Lägg in din API-nyckel och försök igen." },
-      { status: 503 }
-    );
+  if (!hasAIKey()) {
+    return NextResponse.json({ error: AI_MISSING_KEY_MESSAGE }, { status: 503 });
   }
 
   const body = (await request.json().catch(() => null)) as {
@@ -80,34 +83,11 @@ ${periodLines.join("\n")}
 
 ${context}`;
 
-  const client = getAnthropicClient();
-  const stream = client.messages.stream({
-    model: AI_MODEL,
-    max_tokens: 6000,
+  const gen = streamAIText({
     system: BYGG_SYSTEM_PROMPT,
+    maxTokens: 6000,
     messages: [{ role: "user", content: prompt }],
   });
 
-  const encoder = new TextEncoder();
-  const readable = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      try {
-        for await (const event of stream) {
-          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-            controller.enqueue(encoder.encode(event.delta.text));
-          }
-        }
-        controller.close();
-      } catch (e) {
-        controller.error(e);
-      }
-    },
-    cancel() {
-      stream.abort();
-    },
-  });
-
-  return new Response(readable, {
-    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
-  });
+  return aiTextResponse(gen);
 }
