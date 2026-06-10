@@ -4,7 +4,13 @@ Personligt AI-drivet kontrollcenter för projektledare/beställare inom bygg och
 Projekt, möten, åtgärdspunkter, ekonomi (budget/fakturor/ÄTA), dokument, risker,
 automationer och rapporter — på ett ställe, helt på svenska.
 
-**Live:** sajten deployas till Netlify från detta repo.
+**Live på två ställen** (samma databas — använd valfri):
+
+- https://byggprojektledning.netlify.app (Netlify, AI ingår via Netlifys AI Gateway)
+- https://byggprojektledning.vercel.app (Vercel, kräver egen `ANTHROPIC_API_KEY` för AI-funktionerna)
+
+Båda deployas automatiskt vid push till `main`. Tar gratiskrediterna slut hos den ena
+fungerar den andra.
 
 ## Teknik
 
