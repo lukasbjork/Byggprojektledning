@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Pencil, Plus } from "lucide-react";
+import { ArrowLeft, Pencil, Plus, Sparkles } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,14 +10,17 @@ import {
   ProjectNumber,
   ActionStatusStamp,
 } from "@/components/status-badges";
-import { PhasePlaceholder } from "@/components/phase-placeholder";
 import { MilestoneList, type MilestoneRow } from "@/components/projects/milestone-list";
+import { RisksCard } from "@/components/projects/risks-card";
 import { DeleteProjectButton } from "@/components/projects/delete-project-button";
 import { BudgetItemsCard, type BudgetItemRow } from "@/components/ekonomi/budget-items-card";
 import { InvoicesCard, type InvoiceRow } from "@/components/ekonomi/invoices-card";
 import { AtaCard, type AtaRow } from "@/components/ekonomi/ata-card";
 import { ForecastCard } from "@/components/ekonomi/forecast-card";
 import { CostChart, type CostPoint } from "@/components/ekonomi/cost-chart";
+import { UploadZone } from "@/components/dokument/upload-zone";
+import { DocumentList, type DocumentListItem } from "@/components/dokument/document-list";
+import { RequiredDocs } from "@/components/dokument/required-docs";
 import {
   projectTypeLabels,
   entreprenadformLabels,
@@ -50,6 +53,47 @@ export default async function ProjectDetailPage({
     },
   });
   if (!project) notFound();
+
+  // Dokument hämtas separat med select så att filinnehållet (Bytes) inte läses in
+  const [documents, requiredDocuments, projectReports] = await Promise.all([
+    prisma.document.findMany({
+      where: { projectId: id },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        summary: true,
+        versions: {
+          orderBy: { version: "desc" },
+          select: { id: true, version: true, fileName: true, size: true, createdAt: true },
+        },
+      },
+    }),
+    prisma.requiredDocument.findMany({
+      where: { projectId: id },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.report.findMany({
+      where: { projectId: id },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, title: true, createdAt: true },
+    }),
+  ]);
+
+  const documentItems: DocumentListItem[] = documents.map((d) => ({
+    id: d.id,
+    name: d.name,
+    category: d.category,
+    summary: d.summary ?? "",
+    versions: d.versions.map((v) => ({
+      id: v.id,
+      version: v.version,
+      fileName: v.fileName,
+      size: v.size ?? 0,
+      createdAt: formatDate(v.createdAt),
+    })),
+  }));
 
   // Utfall per budgetpost (attesterade + betalda fakturor)
   const outcomeInvoices = project.invoices.filter(
@@ -169,6 +213,13 @@ export default async function ProjectDetailPage({
             <ProjectNumber value={project.projectNumber} />
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              render={<Link href={`/assistent?projekt=${project.id}`} />}
+            >
+              <Sparkles className="size-4" />
+              Fråga AI:n
+            </Button>
             <Button
               variant="outline"
               render={<Link href={`/projekt/${project.id}/redigera`} />}
@@ -386,14 +437,97 @@ export default async function ProjectDetailPage({
         <TabsContent value="ata" className="mt-4">
           <AtaCard projectId={project.id} atas={ataRows} originalBudget={budget} />
         </TabsContent>
-        <TabsContent value="dokument" className="mt-4">
-          <PhasePlaceholder phase={4} module="Dokumenthantering" />
+        <TabsContent value="dokument" className="mt-4 space-y-4">
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="text-base">Ladda upp dokument</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <UploadZone projectId={project.id} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Obligatoriska handlingar</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RequiredDocs
+                  projectId={project.id}
+                  docs={requiredDocuments.map((d) => ({
+                    id: d.id,
+                    name: d.name,
+                    fulfilled: d.fulfilled,
+                  }))}
+                />
+              </CardContent>
+            </Card>
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                Dokument ({documentItems.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DocumentList documents={documentItems} />
+            </CardContent>
+          </Card>
         </TabsContent>
         <TabsContent value="risker" className="mt-4">
-          <PhasePlaceholder phase={6} module="Fördjupad riskhantering" />
+          <RisksCard
+            projectId={project.id}
+            risks={project.risks.map((r) => ({
+              id: r.id,
+              title: r.title,
+              description: r.description ?? "",
+              probability: r.probability,
+              consequence: r.consequence,
+              status: r.status,
+              action: r.action ?? "",
+            }))}
+          />
         </TabsContent>
         <TabsContent value="rapporter" className="mt-4">
-          <PhasePlaceholder phase={6} module="Rapportgeneratorn" />
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Rapporter för projektet</CardTitle>
+              <Button
+                variant="secondary"
+                size="sm"
+                render={<Link href={`/rapporter?projekt=${project.id}`} />}
+              >
+                <Plus className="size-4" />
+                Generera rapport
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {projectReports.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Inga rapporter ännu. Generera den första via knappen ovan.
+                </p>
+              ) : (
+                <ul className="divide-y">
+                  {projectReports.map((r) => (
+                    <li key={r.id} className="flex items-center gap-3 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <a
+                          href={`/rapporter/${r.id}/utskrift`}
+                          target="_blank"
+                          className="truncate text-sm font-medium hover:underline"
+                        >
+                          {r.title}
+                        </a>
+                      </div>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {formatDate(r.createdAt)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

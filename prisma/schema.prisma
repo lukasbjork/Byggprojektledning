@@ -259,7 +259,10 @@ model DocumentVersion {
   document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   version     Int
   fileName    String // namn enligt namnstandard
-  storagePath String // sökväg i uploads/ eller Netlify Blobs-nyckel
+  // Filinnehållet lagras i databasen (Neon) så att lokal körning,
+  // Netlify och Vercel delar samma filer. Max ~4 MB per fil
+  // (serverless-plattformarnas gräns för request-storlek).
+  data        Bytes
   mimeType    String?
   size        Int?
   createdAt   DateTime @default(now())
@@ -302,6 +305,14 @@ model AutomationRule {
   updatedAt        DateTime       @updatedAt
 
   logs AutomationLog[]
+}
+
+// Markerar när regelmotorn senast kördes, så att sidladdningar inte
+// kör om kontrollerna oftare än nödvändigt.
+model AutomationRun {
+  id        String   @id @default(cuid())
+  trigger   String // "sidladdning" eller "manuell"
+  createdAt DateTime @default(now())
 }
 
 model AutomationLog {

@@ -77,6 +77,6 @@ Databasen ligger i Neon (Postgres). Två sätt att ta backup:
 | 1 | Grund, inloggning, projektregister, dashboard | ✅ Klar |
 | 2 | Möteshantering med AI-protokoll och åtgärdspunkter | ✅ Klar |
 | 3 | Ekonomiuppföljning: budget, fakturor, ÄTA, prognos | ✅ Klar |
-| 4 | Dokumenthantering med versioner och AI-kategorisering | Planerad |
-| 5 | AI-assistent med projektkontext | Planerad |
-| 6 | Automationer, notiser och rapportgenerator | Planerad |
+| 4 | Dokumenthantering med versioner och AI-kategorisering | ✅ Klar |
+| 5 | AI-assistent med projektkontext | ✅ Klar |
+| 6 | Automationer, notiser och rapportgenerator | ✅ Klar |

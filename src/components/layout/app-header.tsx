@@ -1,19 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Bell, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Brand } from "./brand";
 import { SidebarNav } from "./sidebar-nav";
 import { ThemeToggle } from "./theme-toggle";
+import { NotificationBell, type NotificationView } from "./notification-bell";
 
-export function AppHeader() {
+export function AppHeader({
+  notifications,
+  unreadCount,
+}: {
+  notifications: NotificationView[];
+  unreadCount: number;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const today = new Date().toLocaleDateString("sv-SE");
 
@@ -44,21 +46,7 @@ export function AppHeader() {
       </span>
 
       <div className="ml-auto flex items-center gap-1">
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Notiser (kommer i fas 6)"
-                className="text-muted-foreground/60"
-              />
-            }
-          >
-            <Bell className="size-4" />
-          </TooltipTrigger>
-          <TooltipContent>Notiscentral byggs i fas 6</TooltipContent>
-        </Tooltip>
+        <NotificationBell notifications={notifications} unreadCount={unreadCount} />
         <ThemeToggle />
       </div>
     </header>
