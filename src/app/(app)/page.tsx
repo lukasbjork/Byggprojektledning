@@ -137,7 +137,8 @@ export default async function DashboardPage() {
   }));
 
   const totalForecast = activeProjects.reduce(
-    (sum, p) => sum + Number(p.budget) + (ataByProject.get(p.id) ?? 0),
+    (sum, p) =>
+      sum + Number(p.budget) + (ataByProject.get(p.id) ?? 0) + Number(p.forecastAdjustment),
     0
   );
 

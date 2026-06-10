@@ -2,12 +2,16 @@ import type {
   ProjectStatus,
   ActionStatus,
   MilestoneStatus,
+  InvoiceStatus,
+  AtaStatus,
 } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import {
   projectStatusLabels,
   actionStatusLabels,
   milestoneStatusLabels,
+  invoiceStatusLabels,
+  ataStatusLabels,
 } from "@/lib/labels";
 import type { RiskColor } from "@/lib/risk";
 
@@ -66,6 +70,50 @@ const milestoneStatusStyles: Record<MilestoneStatus, string> = {
 export function MilestoneStatusStamp({ status }: { status: MilestoneStatus }) {
   return (
     <Stamp className={milestoneStatusStyles[status]}>{milestoneStatusLabels[status]}</Stamp>
+  );
+}
+
+const invoiceStatusStyles: Record<InvoiceStatus, string> = {
+  ATT_GRANSKA: "border-varsel/50 text-varsel",
+  ATTESTERAD: "border-ritning/40 text-ritning",
+  BESTRIDEN: "border-destructive/50 text-destructive",
+  BETALD: "border-godkand/50 text-godkand",
+};
+
+export function InvoiceStatusStamp({ status }: { status: InvoiceStatus }) {
+  return <Stamp className={invoiceStatusStyles[status]}>{invoiceStatusLabels[status]}</Stamp>;
+}
+
+const ataStatusStyles: Record<AtaStatus, string> = {
+  ANMALD: "border-varsel/50 text-varsel",
+  PRISSATT: "border-ritning/40 text-ritning",
+  GODKAND: "border-godkand/50 text-godkand",
+  AVSLAGEN: "border-destructive/50 text-destructive",
+  FAKTURERAD: "border-muted-foreground/40 text-muted-foreground",
+};
+
+export function AtaStatusStamp({ status }: { status: AtaStatus }) {
+  return <Stamp className={ataStatusStyles[status]}>{ataStatusLabels[status]}</Stamp>;
+}
+
+/** Varsel-/avvikelseflagga, t.ex. "Över budget" eller "Saknar koppling". */
+export function DeviationFlag({
+  children,
+  severity = "varsel",
+}: {
+  children: React.ReactNode;
+  severity?: "varsel" | "destruktiv";
+}) {
+  return (
+    <Stamp
+      className={
+        severity === "destruktiv"
+          ? "border-destructive/50 text-destructive"
+          : "border-varsel/50 text-varsel"
+      }
+    >
+      {children}
+    </Stamp>
   );
 }
 

@@ -127,6 +127,9 @@ model Project {
   entreprenadform Entreprenadform
   status          ProjectStatus   @default(PLANERING)
   budget          Decimal         @default(0) @db.Decimal(14, 2)
+  // Bedömd återstående/tillkommande kostnad utöver budget och godkända ÄTA.
+  // Slutkostnadsprognos = budget + godkända ÄTA + detta belopp.
+  forecastAdjustment Decimal      @default(0) @db.Decimal(14, 2)
   startDate       DateTime?
   endDate         DateTime?
   client          String? // beställare

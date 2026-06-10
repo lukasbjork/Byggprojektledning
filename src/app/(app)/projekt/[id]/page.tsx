@@ -13,6 +13,11 @@ import {
 import { PhasePlaceholder } from "@/components/phase-placeholder";
 import { MilestoneList, type MilestoneRow } from "@/components/projects/milestone-list";
 import { DeleteProjectButton } from "@/components/projects/delete-project-button";
+import { BudgetItemsCard, type BudgetItemRow } from "@/components/ekonomi/budget-items-card";
+import { InvoicesCard, type InvoiceRow } from "@/components/ekonomi/invoices-card";
+import { AtaCard, type AtaRow } from "@/components/ekonomi/ata-card";
+import { ForecastCard } from "@/components/ekonomi/forecast-card";
+import { CostChart, type CostPoint } from "@/components/ekonomi/cost-chart";
 import {
   projectTypeLabels,
   entreprenadformLabels,
@@ -25,10 +30,13 @@ import { cn } from "@/lib/utils";
 
 export default async function ProjectDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ flik?: string }>;
 }) {
   const { id } = await params;
+  const { flik } = await searchParams;
   const project = await prisma.project.findUnique({
     where: { id },
     include: {
@@ -36,25 +44,87 @@ export default async function ProjectDetailPage({
       risks: { orderBy: { createdAt: "asc" } },
       meetings: { orderBy: { date: "desc" } },
       actionItems: { orderBy: [{ deadline: "asc" }, { createdAt: "desc" }] },
+      budgetItems: { orderBy: { account: "asc" } },
+      invoices: { orderBy: { invoiceDate: "desc" } },
+      changeOrders: { orderBy: { number: "asc" } },
     },
   });
   if (!project) notFound();
 
-  const [outcomeAgg, approvedAtaAgg] = await Promise.all([
-    prisma.invoice.aggregate({
-      where: { projectId: id, status: { in: ["ATTESTERAD", "BETALD"] } },
-      _sum: { amount: true },
-    }),
-    prisma.changeOrder.aggregate({
-      where: { projectId: id, status: { in: ["GODKAND", "FAKTURERAD"] } },
-      _sum: { amount: true },
-    }),
-  ]);
+  // Utfall per budgetpost (attesterade + betalda fakturor)
+  const outcomeInvoices = project.invoices.filter(
+    (inv) => inv.status === "ATTESTERAD" || inv.status === "BETALD"
+  );
+  const outcomeByBudgetItem = new Map<string, number>();
+  for (const inv of outcomeInvoices) {
+    if (inv.budgetItemId) {
+      outcomeByBudgetItem.set(
+        inv.budgetItemId,
+        (outcomeByBudgetItem.get(inv.budgetItemId) ?? 0) + Number(inv.amount)
+      );
+    }
+  }
 
   const budget = Number(project.budget);
-  const outcome = Number(outcomeAgg._sum.amount ?? 0);
-  const approvedAta = Number(approvedAtaAgg._sum.amount ?? 0);
-  const forecast = budget + approvedAta;
+  const adjustment = Number(project.forecastAdjustment);
+  const outcome = outcomeInvoices.reduce((s, inv) => s + Number(inv.amount), 0);
+  const approvedAta = project.changeOrders
+    .filter((a) => a.status === "GODKAND" || a.status === "FAKTURERAD")
+    .reduce((s, a) => s + Number(a.amount), 0);
+  const forecast = budget + approvedAta + adjustment;
+
+  // Kostnadsutveckling: ackumulerat utfall per månad
+  const costPoints: CostPoint[] = [];
+  {
+    const sorted = [...outcomeInvoices].sort(
+      (a, b) => a.invoiceDate.getTime() - b.invoiceDate.getTime()
+    );
+    let acc = 0;
+    for (const inv of sorted) {
+      const label = inv.invoiceDate.toLocaleDateString("sv-SE", {
+        month: "short",
+        year: "2-digit",
+      });
+      acc += Number(inv.amount);
+      const last = costPoints[costPoints.length - 1];
+      if (last && last.month === label) last.utfall = acc;
+      else costPoints.push({ month: label, utfall: acc });
+    }
+  }
+
+  const budgetItemRows: BudgetItemRow[] = project.budgetItems.map((b) => ({
+    id: b.id,
+    account: b.account,
+    description: b.description ?? "",
+    budgeted: Number(b.budgeted),
+    outcome: outcomeByBudgetItem.get(b.id) ?? 0,
+  }));
+
+  const invoiceRows: InvoiceRow[] = project.invoices.map((inv) => ({
+    id: inv.id,
+    supplier: inv.supplier,
+    amount: Number(inv.amount),
+    date: formatDate(inv.invoiceDate),
+    status: inv.status,
+    budgetItemId: inv.budgetItemId,
+    note: inv.note ?? "",
+  }));
+
+  const ataRows: AtaRow[] = project.changeOrders.map((a) => ({
+    id: a.id,
+    number: a.number,
+    title: a.title,
+    description: a.description ?? "",
+    date: formatDate(a.date),
+    amount: Number(a.amount),
+    status: a.status,
+    note: a.note ?? "",
+  }));
+
+  const budgetItemOptions = project.budgetItems.map((b) => ({
+    id: b.id,
+    label: b.account,
+  }));
 
   const milestoneRows: MilestoneRow[] = project.milestones.map((m) => ({
     id: m.id,
@@ -111,7 +181,7 @@ export default async function ProjectDetailPage({
         </div>
       </div>
 
-      <Tabs defaultValue="oversikt">
+      <Tabs defaultValue={flik ?? "oversikt"}>
         <TabsList className="h-auto w-full flex-wrap justify-start">
           <TabsTrigger value="oversikt">Översikt</TabsTrigger>
           <TabsTrigger value="moten">Möten</TabsTrigger>
@@ -295,11 +365,26 @@ export default async function ProjectDetailPage({
             </CardContent>
           </Card>
         </TabsContent>
-        <TabsContent value="ekonomi" className="mt-4">
-          <PhasePlaceholder phase={3} module="Ekonomiuppföljning" />
+        <TabsContent value="ekonomi" className="mt-4 space-y-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ForecastCard
+              projectId={project.id}
+              budget={budget}
+              approvedAta={approvedAta}
+              adjustment={adjustment}
+              outcome={outcome}
+            />
+            <CostChart data={costPoints} budget={budget} />
+          </div>
+          <BudgetItemsCard projectId={project.id} items={budgetItemRows} />
+          <InvoicesCard
+            projectId={project.id}
+            invoices={invoiceRows}
+            budgetItems={budgetItemOptions}
+          />
         </TabsContent>
         <TabsContent value="ata" className="mt-4">
-          <PhasePlaceholder phase={3} module="ÄTA-registret" />
+          <AtaCard projectId={project.id} atas={ataRows} originalBudget={budget} />
         </TabsContent>
         <TabsContent value="dokument" className="mt-4">
           <PhasePlaceholder phase={4} module="Dokumenthantering" />

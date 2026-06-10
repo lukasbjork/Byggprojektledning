@@ -19,9 +19,9 @@ export interface NavItem {
   phase: number;
 }
 
-// Fas 1–2 är byggda; senare moduler visas avstängda med fas-markering
+// Fas 1–3 är byggda; senare moduler visas avstängda med fas-markering
 // tills respektive fas levereras.
-export const CURRENT_PHASE = 2;
+export const CURRENT_PHASE = 3;
 
 export const navItems: NavItem[] = [
   { title: "Dashboard", href: "/", icon: LayoutDashboard, phase: 1 },
