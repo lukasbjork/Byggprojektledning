@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, Pencil, Plus } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ProjectStatusStamp,
   ProjectNumber,
+  ActionStatusStamp,
 } from "@/components/status-badges";
 import { PhasePlaceholder } from "@/components/phase-placeholder";
 import { MilestoneList, type MilestoneRow } from "@/components/projects/milestone-list";
@@ -17,8 +18,10 @@ import {
   entreprenadformLabels,
   riskLevelLabels,
   riskStatusLabels,
+  meetingTypeLabels,
 } from "@/lib/labels";
 import { formatDate, formatSEK, daysUntil } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 export default async function ProjectDetailPage({
   params,
@@ -31,6 +34,8 @@ export default async function ProjectDetailPage({
     include: {
       milestones: { orderBy: { deadline: "asc" } },
       risks: { orderBy: { createdAt: "asc" } },
+      meetings: { orderBy: { date: "desc" } },
+      actionItems: { orderBy: [{ deadline: "asc" }, { createdAt: "desc" }] },
     },
   });
   if (!project) notFound();
@@ -208,10 +213,87 @@ export default async function ProjectDetailPage({
         </TabsContent>
 
         <TabsContent value="moten" className="mt-4">
-          <PhasePlaceholder phase={2} module="Möteshantering med AI-protokoll" />
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Möten i projektet</CardTitle>
+              <Button
+                variant="secondary"
+                size="sm"
+                render={<Link href={`/moten/nytt?projekt=${project.id}`} />}
+              >
+                <Plus className="size-4" />
+                Nytt möte
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {project.meetings.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Inga möten ännu.</p>
+              ) : (
+                <ul className="divide-y">
+                  {project.meetings.map((m) => (
+                    <li key={m.id} className="flex items-center gap-3 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/moten/${m.id}`}
+                          className="truncate text-sm font-medium hover:underline"
+                        >
+                          {m.title}
+                        </Link>
+                        <p className="text-xs text-muted-foreground">
+                          {meetingTypeLabels[m.type]}
+                          {m.protocol ? " · protokoll klart" : " · protokoll saknas"}
+                        </p>
+                      </div>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {formatDate(m.date)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
         <TabsContent value="atgarder" className="mt-4">
-          <PhasePlaceholder phase={2} module="Åtgärdspunkter" />
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Åtgärdspunkter i projektet</CardTitle>
+              <Button variant="secondary" size="sm" render={<Link href="/atgarder" />}>
+                Alla åtgärder
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {project.actionItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Inga åtgärdspunkter ännu.</p>
+              ) : (
+                <ul className="divide-y">
+                  {project.actionItems.map((a) => {
+                    const days = a.deadline ? daysUntil(a.deadline) : null;
+                    const overdue = days !== null && days < 0 && a.status !== "KLAR";
+                    return (
+                      <li key={a.id} className="flex items-center gap-3 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{a.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {a.responsible ?? "Ingen ansvarig"}
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            "font-mono text-xs",
+                            overdue ? "text-destructive" : "text-muted-foreground"
+                          )}
+                        >
+                          {a.deadline ? formatDate(a.deadline) : "–"}
+                        </span>
+                        <ActionStatusStamp status={overdue ? "FORSENAD" : a.status} />
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
         <TabsContent value="ekonomi" className="mt-4">
           <PhasePlaceholder phase={3} module="Ekonomiuppföljning" />
